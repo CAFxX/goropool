@@ -1,3 +1,5 @@
+// Package goropool implements a dead-simple bounded goroutine pool. It is
+// mostly useful when dealing with blocking I/O calls.
 package goropool // ゴロプル
 
 import (
@@ -5,19 +7,17 @@ import (
 	"sync"
 )
 
-// NewDefaultPool creates a new goroutine pool with runtime.NumCPU() workers and
-// a queue of size 0 (i.e. a worker must be idle for the send to the queue to
-// succeed). See NewPool() for details about the returned values.
-func NewDefaultPool() (chan<- func(), <-chan error) {
-	return NewPool(runtime.NumCPU(), 0)
-}
-
 // NewPool creates a bounded goroutine pool with workers goroutine accepting
-// work on a queue with queueSize elements. The first channel returned is the
-// queue jobs should be submitted on. Closing this channel signals that no more
-// jobs will be sent to the pool. The second channel signals completion of all
-// queued jobs (this can only happen after the queue channel has been closed).
+// work on a queue with queueSize elements.
+// Two channels are returned: queue and done. The former is the channel jobs
+// should be submitted on. A job is simply a func(). Closing the queue channel
+// signals to the pool that no more jobs will be enqueued. Once the queue
+// channel has been closed and all queued jobs have been completed the pool will
+// close the second channel (done) to signal that the pool has shut down.
 // Each pool is made up of workers+1 goroutines. NewPool returns immediately.
+// The done channel is of type error for future extensibility, currently no
+// error will be returned under any circumstances. The pool makes no attempt to
+// recover panicking jobs.
 func NewPool(workers, queueSize int) (chan<- func(), <-chan error) {
 	queue := make(chan func(), queueSize)
 	done := make(chan error)
@@ -36,4 +36,11 @@ func NewPool(workers, queueSize int) (chan<- func(), <-chan error) {
 		close(done)
 	}()
 	return queue, done
+}
+
+// NewDefaultPool creates a new goroutine pool with runtime.NumCPU() workers and
+// a queue of size 0 (i.e. a worker must be idle for the send to the queue to
+// succeed). See NewPool() for details about the returned values.
+func NewDefaultPool() (chan<- func(), <-chan error) {
+	return NewPool(runtime.NumCPU(), 0)
 }
